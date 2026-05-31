@@ -13,16 +13,26 @@ import { useEffect, useRef } from 'react';
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { useGameStore } from '@/store/game-store';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Lazy singleton — only created in the browser, never during SSR/prerender
+let _supabase: ReturnType<typeof createClient> | null = null;
 
-// Create a single supabase client instance if env vars are present
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+function getSupabase() {
+  if (_supabase) return _supabase;
+  if (typeof window === 'undefined') return null;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  if (!url || !key) return null;
+
+  _supabase = createClient(url, key);
+  return _supabase;
+}
 
 export function useMultiplayer(roomId: string | null) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   
   useEffect(() => {
+    const supabase = getSupabase();
     if (!roomId || !supabase) {
       if (!supabase && roomId) {
         console.warn('Multiplayer requested but Supabase credentials are not configured.');
@@ -77,7 +87,7 @@ export function useMultiplayer(roomId: string | null) {
 
   // 4. Broadcast our moves to the opponent
   useEffect(() => {
-    if (!roomId || !supabase) return;
+    if (!roomId || !getSupabase()) return;
 
     const unsubscribeMoves = useGameStore.subscribe(
       (state) => state.moveHistory,
